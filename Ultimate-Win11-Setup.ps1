@@ -76,7 +76,10 @@ $Script:SkippedActions = New-Object System.Collections.Generic.List[string]
 $Script:FailedActions  = New-Object System.Collections.Generic.List[string]
 $Script:IsDryRun       = [bool]$DryRun
 $Script:BoundParams    = $PSBoundParameters
-$Script:SourceUrl      = 'https://raw.githubusercontent.com/SuperPhenix/power-master/main/Ultimate-Win11-Setup.ps1'
+$Script:SourceUrls     = @(
+    'https://raw.githubusercontent.com/SuperPhenix/power-master/main/Ultimate-Win11-Setup.ps1',
+    'https://raw.githubusercontent.com/SuperPhenix/power-master/vibe/ultimate-win11-setup-488f29/Ultimate-Win11-Setup.ps1'
+)
 $Script:IsIexMode      = [string]::IsNullOrEmpty($PSCommandPath)
 
 $Script:Title = @'
@@ -167,12 +170,24 @@ function Test-IsAdmin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-SelfCommand {
+    foreach ($u in $Script:SourceUrls) {
+        try {
+            Invoke-WebRequest -Uri $u -Method Head -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop | Out-Null
+            return $u
+        }
+        catch { }
+    }
+    return $Script:SourceUrls[0]
+}
+
 function Assert-Elevation {
     if (Test-IsAdmin) { return $true }
     Write-Host "Elevation administrateur requise. Relancement du script eleve..." -ForegroundColor Yellow
     if ($Script:IsIexMode) {
+        $url = Get-SelfCommand
         Start-Process -FilePath 'powershell.exe' -Verb RunAs `
-            -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm '$($Script:SourceUrl)' | iex`""
+            -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm '$url' | iex`""
     }
     else {
         $argPairs = @()
@@ -813,7 +828,8 @@ function Invoke-Maintenance {
     }
 
     Invoke-Logged -Description "Creation d'une tache planifiee de maintenance hebdomadaire (dimanche 03h00)" -Action {
-        $dl  = 'irm ''' + $Script:SourceUrl + ''' -OutFile $env:TEMP\UltimateWin11Setup.ps1'
+        $url = Get-SelfCommand
+        $dl  = 'irm ''' + $url + ''' -OutFile $env:TEMP\UltimateWin11Setup.ps1'
         $run = '& $env:TEMP\UltimateWin11Setup.ps1 -RunMaintenance -NoRestorePoint -NoRestartPrompt'
         $arg = '-NoProfile -ExecutionPolicy Bypass -Command "' + $dl + '; ' + $run + '"'
         $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
