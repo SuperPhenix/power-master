@@ -193,6 +193,8 @@ function Get-SystemInfo {
         Gpu      = 'n/a'
         Ram      = 'n/a'
         Disk     = 'n/a'
+        Os       = 'n/a'
+        BootTime = $null
     }
 
     try {
@@ -222,6 +224,15 @@ function Get-SystemInfo {
     catch { }
 
     try {
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+        if ($os) {
+            $info.Os = ("{0} (build {1})" -f ($os.Caption -replace '^Microsoft ', ''), $os.BuildNumber)
+            $info.BootTime = $os.LastBootUpTime
+        }
+    }
+    catch { }
+
+    try {
         $disk = Get-PhysicalDisk -ErrorAction Stop | Sort-Object Size -Descending | Select-Object -First 1
         if ($disk) {
             $sizeGo = [math]::Round($disk.Size / 1GB)
@@ -237,8 +248,14 @@ function Get-SystemInfo {
 function Show-SystemInfo {
     $i = Get-SystemInfo
     $edge = "  " + ("-" * 70)
+    $uptime = 'n/a'
+    if ($i.BootTime) {
+        $up = (Get-Date) - $i.BootTime
+        $uptime = ("{0}j {1}h {2}min" -f $up.Days, $up.Hours, $up.Minutes)
+    }
     Write-Host $edge -ForegroundColor DarkGray
     Write-Host ("   POSTE : {0}   |   SESSION : {1}   |   IP : {2}" -f $i.Computer, $i.User, $i.Ip) -ForegroundColor White
+    Write-Host ("   OS   : {0}   |   UPTIME : {1}" -f $i.Os, $uptime) -ForegroundColor White
     Write-Host ("   CPU : {0}" -f $i.Cpu) -ForegroundColor White
     Write-Host ("   GPU : {0}" -f $i.Gpu) -ForegroundColor White
     Write-Host ("   RAM : {0}   |   DISQUE : {1}" -f $i.Ram, $i.Disk) -ForegroundColor White
