@@ -186,15 +186,21 @@ function Get-SystemInfo {
     if ($Script:SystemInfo) { return $Script:SystemInfo }
 
     $info = @{
-        Computer = $env:COMPUTERNAME
-        User     = $env:USERNAME
-        Ip       = 'n/a'
-        Cpu      = 'n/a'
-        Gpu      = 'n/a'
-        Ram      = 'n/a'
-        Disk     = 'n/a'
-        Os       = 'n/a'
-        BootTime = $null
+        Computer  = $env:COMPUTERNAME
+        User      = $env:USERNAME
+        Ip        = 'n/a'
+        Cpu       = 'n/a'
+        Gpu       = 'n/a'
+        Ram       = 'n/a'
+        Disk      = 'n/a'
+        Os        = 'n/a'
+        BootTime  = $null
+        PcType    = ''
+        Domain    = 'n/a'
+        Res       = ''
+        FreeSpace = ''
+        Macs      = ''
+        Av        = ''
     }
 
     try {
@@ -213,13 +219,22 @@ function Get-SystemInfo {
 
     try {
         $gpu = Get-CimInstance Win32_VideoController -ErrorAction Stop | Select-Object -First 1
-        if ($gpu -and $gpu.Name) { $info.Gpu = $gpu.Name.Trim() }
+        if ($gpu -and $gpu.Name) {
+            $info.Gpu = $gpu.Name.Trim()
+            if ($gpu.CurrentHorizontalResolution) {
+                $info.Res = ("{0}x{1}" -f $gpu.CurrentHorizontalResolution, $gpu.CurrentVerticalResolution)
+            }
+        }
     }
     catch { }
 
     try {
         $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
-        if ($cs) { $info.Ram = ("{0:N1} Go" -f ($cs.TotalPhysicalMemory / 1GB)) }
+        if ($cs) {
+            $info.Ram = ("{0:N1} Go" -f ($cs.TotalPhysicalMemory / 1GB))
+            $info.Domain = $cs.Domain
+            $info.PcType = switch ($cs.PCSystemType) { 2 { 'Portable' } 1 { 'Fixe' } default { '' } }
+        }
     }
     catch { }
 
@@ -241,6 +256,29 @@ function Get-SystemInfo {
     }
     catch { }
 
+    try {
+        $sysLetter = $env:SystemDrive.TrimEnd(':')
+        $vol = Get-Volume -DriveLetter $sysLetter -ErrorAction Stop
+        if ($vol) {
+            $info.FreeSpace = ("Libre {0} / {1} Go" -f [math]::Round($vol.SizeRemaining / 1GB), [math]::Round($vol.Size / 1GB))
+        }
+    }
+    catch { }
+
+    try {
+        $adapters = Get-NetAdapter -ErrorAction Stop | Where-Object Status -eq 'Up' | Select-Object -First 3
+        if ($adapters) {
+            $info.Macs = (($adapters | ForEach-Object { "{0} {1}" -f $_.Name, $_.MacAddress }) -join '  |  ')
+        }
+    }
+    catch { }
+
+    try {
+        $av = Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction Stop | Select-Object -First 1
+        if ($av) { $info.Av = $av.displayName }
+    }
+    catch { }
+
     $Script:SystemInfo = $info
     return $info
 }
@@ -253,12 +291,20 @@ function Show-SystemInfo {
         $up = (Get-Date) - $i.BootTime
         $uptime = ("{0}j {1}h {2}min" -f $up.Days, $up.Hours, $up.Minutes)
     }
+    $pc = $i.Computer
+    if ($i.PcType) { $pc = "{0} ({1})" -f $pc, $i.PcType }
+    $gpuLine = $i.Gpu
+    if ($i.Res) { $gpuLine = "{0} ({1})" -f $gpuLine, $i.Res }
+    $diskLine = $i.Disk
+    if ($i.FreeSpace) { $diskLine = "{0} - {1}" -f $diskLine, $i.FreeSpace }
     Write-Host $edge -ForegroundColor DarkGray
-    Write-Host ("   POSTE : {0}   |   SESSION : {1}   |   IP : {2}" -f $i.Computer, $i.User, $i.Ip) -ForegroundColor White
-    Write-Host ("   OS   : {0}   |   UPTIME : {1}" -f $i.Os, $uptime) -ForegroundColor White
+    Write-Host ("   POSTE : {0}   |   SESSION : {1}   |   IP : {2}" -f $pc, $i.User, $i.Ip) -ForegroundColor White
+    Write-Host ("   OS   : {0}   |   UPTIME : {1}   |   DOMAINE : {2}" -f $i.Os, $uptime, $i.Domain) -ForegroundColor White
     Write-Host ("   CPU : {0}" -f $i.Cpu) -ForegroundColor White
-    Write-Host ("   GPU : {0}" -f $i.Gpu) -ForegroundColor White
-    Write-Host ("   RAM : {0}   |   DISQUE : {1}" -f $i.Ram, $i.Disk) -ForegroundColor White
+    Write-Host ("   GPU : {0}" -f $gpuLine) -ForegroundColor White
+    Write-Host ("   RAM : {0}   |   DISQUE : {1}" -f $i.Ram, $diskLine) -ForegroundColor White
+    if ($i.Macs) { Write-Host ("   MAC  : {0}" -f $i.Macs) -ForegroundColor White }
+    if ($i.Av)   { Write-Host ("   ANTIVIRUS : {0}" -f $i.Av) -ForegroundColor White }
     Write-Host $edge -ForegroundColor DarkGray
 }
 
