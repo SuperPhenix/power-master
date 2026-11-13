@@ -81,6 +81,7 @@ $Script:SourceUrls     = @(
     'https://raw.githubusercontent.com/SuperPhenix/power-master/vibe/ultimate-win11-setup-488f29/Ultimate-Win11-Setup.ps1'
 )
 $Script:IsIexMode      = [string]::IsNullOrEmpty($PSCommandPath)
+$Script:SystemInfo     = $null
 
 $Script:Title = @'
   _   _ _   _        _  _____ ___ _   _ _____ _     ___  _   _
@@ -179,6 +180,69 @@ function Get-SelfCommand {
         catch { }
     }
     return $Script:SourceUrls[0]
+}
+
+function Get-SystemInfo {
+    if ($Script:SystemInfo) { return $Script:SystemInfo }
+
+    $info = @{
+        Computer = $env:COMPUTERNAME
+        User     = $env:USERNAME
+        Ip       = 'n/a'
+        Cpu      = 'n/a'
+        Gpu      = 'n/a'
+        Ram      = 'n/a'
+        Disk     = 'n/a'
+    }
+
+    try {
+        $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+            Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
+            Select-Object -First 1
+        if ($ip) { $info.Ip = $ip.IPAddress }
+    }
+    catch { }
+
+    try {
+        $cpu = Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1
+        if ($cpu -and $cpu.Name) { $info.Cpu = $cpu.Name.Trim() }
+    }
+    catch { }
+
+    try {
+        $gpu = Get-CimInstance Win32_VideoController -ErrorAction Stop | Select-Object -First 1
+        if ($gpu -and $gpu.Name) { $info.Gpu = $gpu.Name.Trim() }
+    }
+    catch { }
+
+    try {
+        $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
+        if ($cs) { $info.Ram = ("{0:N1} Go" -f ($cs.TotalPhysicalMemory / 1GB)) }
+    }
+    catch { }
+
+    try {
+        $disk = Get-PhysicalDisk -ErrorAction Stop | Sort-Object Size -Descending | Select-Object -First 1
+        if ($disk) {
+            $sizeGo = [math]::Round($disk.Size / 1GB)
+            $info.Disk = ("{0} {1} Go ({2})" -f $disk.Model, $sizeGo, $disk.MediaType)
+        }
+    }
+    catch { }
+
+    $Script:SystemInfo = $info
+    return $info
+}
+
+function Show-SystemInfo {
+    $i = Get-SystemInfo
+    $edge = "  " + ("-" * 70)
+    Write-Host $edge -ForegroundColor DarkGray
+    Write-Host ("   POSTE : {0}   |   SESSION : {1}   |   IP : {2}" -f $i.Computer, $i.User, $i.Ip) -ForegroundColor White
+    Write-Host ("   CPU : {0}" -f $i.Cpu) -ForegroundColor White
+    Write-Host ("   GPU : {0}" -f $i.Gpu) -ForegroundColor White
+    Write-Host ("   RAM : {0}   |   DISQUE : {1}" -f $i.Ram, $i.Disk) -ForegroundColor White
+    Write-Host $edge -ForegroundColor DarkGray
 }
 
 function Assert-Elevation {
@@ -859,6 +923,9 @@ function Show-Menu {
         Write-Host "  MODE ACTUEL : NORMAL - les modifications seront appliquees" -ForegroundColor Green
     }
 
+    Write-Host ""
+    Show-SystemInfo
+
     $line = "  " + ("-" * 66)
 
     Write-Host ""
@@ -949,6 +1016,8 @@ function Show-Summary {
 function Main {
     Clear-Host
     Write-Host $Script:Title -ForegroundColor Cyan
+    Write-Host ""
+    Show-SystemInfo
     Write-Host ""
 
     if ($Script:IsDryRun) {
