@@ -826,24 +826,43 @@ function Invoke-Maintenance {
 #  MENU INTERACTIF
 # ============================================================
 function Show-Menu {
+    Clear-Host
+    Write-Host $Script:Title -ForegroundColor Cyan
+
+    if ($Script:IsDryRun) {
+        Write-Host "  MODE ACTUEL : DRYRUN - previsualisation, aucune modification ne sera appliquee" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "  MODE ACTUEL : NORMAL - les modifications seront appliquees" -ForegroundColor Green
+    }
+
+    $line = "  " + ("-" * 66)
+
     Write-Host ""
-    Write-Host "Que souhaitez-vous faire ?" -ForegroundColor Yellow
+    Write-Host $line
+    Write-Host "   SECTIONS A LA CARTE" -ForegroundColor Cyan
+    Write-Host $line
+    Write-Host "   [1]  Debloat           Xbox, Solitaire, Teams perso, Cortana... dehors"
+    Write-Host "   [2]  Confidentialite   Telemetrie, pub, suivi : tout au minimum"
+    Write-Host "   [3]  Windows Update    Report 60j, pas de reboot force, heures actives"
+    Write-Host "   [4]  Performance       Hautes perfs, hibernation off, menus instantanes"
+    Write-Host "   [5]  Shell             Taskbar a gauche, Widgets/Copilot off, menu Win10"
+    Write-Host "   [6]  Reseau            RDP, DNS, SMBv1 off, pare-feu, LLMNR/NetBIOS off"
+    Write-Host "   [7]  Securite          UAC, Defender, BitLocker, NTLMv2, verrouillage"
+    Write-Host "   [8]  Applications      19 outils pro via Winget (VS Code, Git, 7-Zip...)"
+    Write-Host "   [9]  Developpement     WSL2, Hyper-V, Sandbox, mode dev, Chocolatey"
+    Write-Host "   [10] Maintenance       Purge, DISM/SFC, tache planifiee hebdomadaire"
+
     Write-Host ""
-    Write-Host "  [1]  Tout appliquer (recommande pour un poste neuf)" -ForegroundColor White
-    Write-Host "  [2]  Debloat uniquement" -ForegroundColor White
-    Write-Host "  [3]  Confidentialite uniquement" -ForegroundColor White
-    Write-Host "  [4]  Windows Update uniquement" -ForegroundColor White
-    Write-Host "  [5]  Performance uniquement" -ForegroundColor White
-    Write-Host "  [6]  Explorateur / Shell uniquement" -ForegroundColor White
-    Write-Host "  [7]  Reseau uniquement" -ForegroundColor White
-    Write-Host "  [8]  Securite uniquement" -ForegroundColor White
-    Write-Host "  [9]  Applications (Winget) uniquement" -ForegroundColor White
-    Write-Host "  [10] Developpement uniquement" -ForegroundColor White
-    Write-Host "  [11] Maintenance uniquement" -ForegroundColor White
-    Write-Host "  [12] Mode DryRun (previsualiser tout, rien appliquer)" -ForegroundColor DarkGray
-    Write-Host "  [0]  Quitter" -ForegroundColor DarkGray
+    Write-Host $line
+    Write-Host "   ACTIONS RAPIDES" -ForegroundColor Cyan
+    Write-Host $line
+    Write-Host "   [A]  TOUT appliquer (recommande pour un poste neuf)" -ForegroundColor White
+    Write-Host "   [D]  Previsualiser TOUT sans rien modifier (DryRun)"
+    Write-Host "   [P]  Basculer le mode DryRun (previsualisation on/off)"
+    Write-Host "   [Q]  Quitter"
     Write-Host ""
-    $choice = Read-Host "Votre choix"
+    $choice = Read-Host "  Votre choix"
     return $choice
 }
 
@@ -864,7 +883,14 @@ function Invoke-All {
 #  RAPPORT FINAL
 # ============================================================
 function Show-Summary {
-    Write-Section "RAPPORT FINAL"
+    param([switch]$Section)
+
+    if ($Section) {
+        Write-Section "SECTION TERMINEE"
+    }
+    else {
+        Write-Section "RAPPORT FINAL"
+    }
     Write-Host ("  Appliquees : {0}" -f $Script:AppliedActions.Count) -ForegroundColor Green
     Write-Host ("  Ignorees   : {0}" -f $Script:SkippedActions.Count) -ForegroundColor DarkGray
     Write-Host ("  Echecs     : {0}" -f $Script:FailedActions.Count) -ForegroundColor Red
@@ -880,6 +906,11 @@ function Show-Summary {
     Write-Host ""
     Write-Host ("  Journal complet : {0}" -f $Script:LogFile) -ForegroundColor Cyan
     Write-Host ""
+
+    if ($Section) {
+        Read-Host "  Appuyez sur Entree pour revenir au menu"
+        return
+    }
 
     if (-not $NoRestartPrompt -and -not $Script:IsDryRun) {
         $restart = Read-Host "Un redemarrage est recommande. Redemarrer maintenant ? (o/N)"
@@ -934,25 +965,29 @@ function Main {
     }
     else {
         while ($true) {
-            $choice = Show-Menu
-            if     ($choice -eq '0')  { Write-Host "Au revoir !" -ForegroundColor Cyan; exit }
-            elseif ($choice -eq '1')  { Invoke-All; break }
-            elseif ($choice -eq '2')  { Invoke-Debloat; break }
-            elseif ($choice -eq '3')  { Invoke-Privacy; break }
-            elseif ($choice -eq '4')  { Invoke-WindowsUpdate; break }
-            elseif ($choice -eq '5')  { Invoke-Performance; break }
-            elseif ($choice -eq '6')  { Invoke-Shell; break }
-            elseif ($choice -eq '7')  { Invoke-Network; break }
-            elseif ($choice -eq '8')  { Invoke-Security; break }
-            elseif ($choice -eq '9')  { Invoke-Apps; break }
-            elseif ($choice -eq '10') { Invoke-Dev; break }
-            elseif ($choice -eq '11') { Invoke-Maintenance; break }
-            elseif ($choice -eq '12') { $Script:IsDryRun = $true; Invoke-All; break }
-            else                      { Write-Host "Choix invalide." -ForegroundColor Red }
+            $choice = (Show-Menu).Trim().ToLower()
+            if     ($choice -eq 'q')  { break }
+            elseif ($choice -eq 'a')  { Invoke-All; Show-Summary }
+            elseif ($choice -eq 'd')  { $Script:IsDryRun = $true; Invoke-All; Show-Summary }
+            elseif ($choice -eq 'p')  { $Script:IsDryRun = -not $Script:IsDryRun }
+            elseif ($choice -eq '1')  { Invoke-Debloat; Show-Summary -Section }
+            elseif ($choice -eq '2')  { Invoke-Privacy; Show-Summary -Section }
+            elseif ($choice -eq '3')  { Invoke-WindowsUpdate; Show-Summary -Section }
+            elseif ($choice -eq '4')  { Invoke-Performance; Show-Summary -Section }
+            elseif ($choice -eq '5')  { Invoke-Shell; Show-Summary -Section }
+            elseif ($choice -eq '6')  { Invoke-Network; Show-Summary -Section }
+            elseif ($choice -eq '7')  { Invoke-Security; Show-Summary -Section }
+            elseif ($choice -eq '8')  { Invoke-Apps; Show-Summary -Section }
+            elseif ($choice -eq '9')  { Invoke-Dev; Show-Summary -Section }
+            elseif ($choice -eq '10') { Invoke-Maintenance; Show-Summary -Section }
+            else {
+                Write-Host "  Choix invalide." -ForegroundColor Red
+                Start-Sleep -Seconds 1
+            }
         }
     }
 
-    Show-Summary
+    Write-Host "Au revoir !" -ForegroundColor Cyan
     try { Stop-Transcript | Out-Null } catch { }
 }
 

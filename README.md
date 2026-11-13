@@ -18,12 +18,18 @@ Script PowerShell "tout-en-un" pour preparer un poste **Windows 11 professionnel
 
 | Commande | Effet |
 |---|---|
-| `.\Ultimate-Win11-Setup.ps1` | Menu interactif (choisir les sections) |
+| `.\Ultimate-Win11-Setup.ps1` | Menu interactif une page (sections 1-10, raccourcis A/D/P/Q) |
 | `.\Ultimate-Win11-Setup.ps1 -All` | Tout appliquer |
 | `.\Ultimate-Win11-Setup.ps1 -All -DryRun` | Previsualiser sans rien modifier |
 | `.\Ultimate-Win11-Setup.ps1 -All -SkipDebloat -SkipApps` | Tout, sauf debloat et apps |
 | `.\Ultimate-Win11-Setup.ps1 -RunApps -AppList "Git.Git","7zip.7zip"` | Apps specifiques uniquement |
 | `.\Ultimate-Win11-Setup.ps1 -RunSecurity -RunNetwork` | Sections choisies uniquement |
+
+## Menu interactif (une seule page)
+
+- Mode courant affiché en haut (NORMAL ou DRYRUN)
+- `[1]`-`[10]` : lancer une section, puis retour automatique au menu avec le rapport
+- `[A]` : tout appliquer · `[D]` : tout prévisualiser (DryRun) · `[P]` : basculer DryRun · `[Q]` : quitter
 
 ## Sections
 
