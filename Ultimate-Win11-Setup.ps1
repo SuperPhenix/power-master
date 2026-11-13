@@ -64,8 +64,6 @@ param(
     [switch]$NoRestartPrompt
 )
 
-#Requires -Version 5.1
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'
@@ -78,6 +76,8 @@ $Script:SkippedActions = New-Object System.Collections.Generic.List[string]
 $Script:FailedActions  = New-Object System.Collections.Generic.List[string]
 $Script:IsDryRun       = [bool]$DryRun
 $Script:BoundParams    = $PSBoundParameters
+$Script:SourceUrl      = 'https://raw.githubusercontent.com/SuperPhenix/power-master/main/Ultimate-Win11-Setup.ps1'
+$Script:IsIexMode      = [string]::IsNullOrEmpty($PSCommandPath)
 
 $Script:Title = @'
   _   _ _   _        _  _____ ___ _   _ _____ _     ___  _   _
@@ -168,8 +168,13 @@ function Test-IsAdmin {
 }
 
 function Assert-Elevation {
-    if (-not (Test-IsAdmin)) {
-        Write-Host "Elevation administrateur requise. Relancement du script eleve..." -ForegroundColor Yellow
+    if (Test-IsAdmin) { return $true }
+    Write-Host "Elevation administrateur requise. Relancement du script eleve..." -ForegroundColor Yellow
+    if ($Script:IsIexMode) {
+        Start-Process -FilePath 'powershell.exe' -Verb RunAs `
+            -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm '$($Script:SourceUrl)' | iex`""
+    }
+    else {
         $argPairs = @()
         foreach ($key in $Script:BoundParams.Keys) {
             $v = $Script:BoundParams[$key]
@@ -180,8 +185,8 @@ function Assert-Elevation {
         $argString = $argPairs -join ' '
         Start-Process -FilePath 'powershell.exe' -Verb RunAs `
             -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" $argString"
-        exit
     }
+    return $false
 }
 
 function Initialize-Logging {
@@ -808,8 +813,10 @@ function Invoke-Maintenance {
     }
 
     Invoke-Logged -Description "Creation d'une tache planifiee de maintenance hebdomadaire (dimanche 03h00)" -Action {
-        $action     = New-ScheduledTaskAction -Execute 'powershell.exe' `
-                        -Argument ("-NoProfile -ExecutionPolicy Bypass -File `"{0}`" -RunMaintenance -NoRestorePoint -NoRestartPrompt" -f $PSCommandPath)
+        $dl  = 'irm ''' + $Script:SourceUrl + ''' -OutFile $env:TEMP\UltimateWin11Setup.ps1'
+        $run = '& $env:TEMP\UltimateWin11Setup.ps1 -RunMaintenance -NoRestorePoint -NoRestartPrompt'
+        $arg = '-NoProfile -ExecutionPolicy Bypass -Command "' + $dl + '; ' + $run + '"'
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
         $trigger    = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 03:00
         $settings   = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries
         $principal  = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
@@ -933,7 +940,12 @@ function Main {
         Write-Host ""
     }
 
-    Assert-Elevation
+    if ($PSVersionTable.PSVersion.Major -lt 5) {
+        Write-Host "PowerShell 5.1 minimum requis." -ForegroundColor Red
+        return
+    }
+
+    if (-not (Assert-Elevation)) { return }
     $Script:LogFile = Initialize-Logging
     New-SafetyNet
     Backup-RegistryKeys

@@ -4,6 +4,16 @@ Script PowerShell "tout-en-un" pour preparer un poste **Windows 11 professionnel
 
 ## Utilisation
 
+### Une ligne, rien a telecharger (recommande)
+
+```powershell
+irm https://raw.githubusercontent.com/SuperPhenix/power-master/main/Ultimate-Win11-Setup.ps1 | iex
+```
+
+Le script se telecharge en memoire, demande l'elevation tout seul (nouvelle console admin) et affiche le menu.
+
+### Ou en fichier local
+
 1. Ouvrir PowerShell **en administrateur** (ou laisser le script s'elever tout seul).
 2. Autoriser l'execution si besoin :
    ```powershell
